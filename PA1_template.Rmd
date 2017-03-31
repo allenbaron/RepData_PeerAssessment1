@@ -13,13 +13,12 @@ knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
 ```
 
 ## Loading and preprocessing the data
+_Note:_ `read_csv()` from the `readr` package "flexibly parse many types of data found in the wild, while still cleanly failing when data unexpectedly changes"
+([readr README](https://cran.r-project.org/web/packages/readr/README.html), so little preprocessing is needed at this stage.
 
-```{r prep_code, eval = FALSE}
+```{r load_data, eval = -2}
 library(tidyverse)
 unzip("activity.zip")
-```
-
-``` {r load_data}
 activity <- read_csv("activity.csv")
 problems(activity) # check for errors in loading/parsing
 ```
@@ -63,6 +62,8 @@ med_steps <- median(daily_steps$total)
 Note that there are a number of days/intervals where there are missing values (coded as 𝙽𝙰). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
 1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with 𝙽𝙰s)
+
+
 2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
 3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
 4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
