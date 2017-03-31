@@ -7,21 +7,50 @@ output:
     keep_md: true
 ---
 
+``` {r global_opts, include = FALSE}
+knitr::opts_chunk$get()
+knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
+```
 
 ## Loading and preprocessing the data
 
+```{r prep_code, eval = FALSE}
+library(tidyverse)
+unzip("activity.zip")
+```
+
+``` {r load_data}
+activity <- read_csv("activity.csv")
+problems(activity) # check for errors in loading/parsing
+```
+
+``` {r initial_look}
+str(activity)
+summary(activity)
+summarize_each(activity, funs(sum(is.na(.))))
+```
 1. Load the data (i.e. 𝚛𝚎𝚊𝚍.𝚌𝚜𝚟())
 2. Process/transform the data (if necessary) into a format suitable for your analysis
 
 
 ## What is mean total number of steps taken per day?
-
-For this part of the assignment, you can ignore the missing values in the dataset.
-
-1. Calculate the total number of steps taken per day
+``` {r total_steps}
+bydate <- group_by(activity, date)
+daily_steps <- summarize(bydate, total = sum(steps, na.rm = TRUE))
+qplot(total, data = daily_steps, bins = 20,
+      xlab = "total steps per day",
+      main = "Histogram")
+```
 2. If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day
 3. Calculate and report the mean and median of the total number of steps taken per day
 
+``` {r mean_median}
+avg_steps <- mean(daily_steps$total)
+med_steps <- median(daily_steps$total)
+```
+
+- Mean number of steps taken each day = `r avg_steps`
+- Median number of steps taken each day = `r med_steps`.
 
 ## What is the average daily activity pattern?
 
