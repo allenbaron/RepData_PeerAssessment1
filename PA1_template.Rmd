@@ -19,6 +19,7 @@ _Note:_ `read_csv()` from the `readr` package "flexibly parse many types of data
 ``` {r preload, eval = -3, results = "hide"}
 library(tidyverse)
 library(lubridate)
+library(gridExtra)
 unzip("activity.zip")
 ```
 
@@ -36,9 +37,10 @@ summary(activity)
 ``` {r total_steps}
 by_date <- group_by(activity, date)
 daily_steps <- summarize(by_date, total = sum(steps, na.rm = TRUE))
-qplot(total, data = daily_steps, bins = 20,
+daily_hist <- qplot(total, data = daily_steps, bins = 20,
       xlab = "total steps per day",
       main = "Histogram")
+daily_hist
 ```
 2. If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day
 3. Calculate and report the mean and median of the total number of steps taken per day
@@ -80,40 +82,71 @@ Total rows with NA values = `r total_NA$steps`
 Before deciding how to impute NA values it's probably best to see if there is any pattern.
 ``` {r missing_info}
 NA_vals <- filter(activity, is.na(activity$steps))
-qplot(interval, date, data = NA_vals)
+qplot(interval, date, data = NA_vals,
+      main = "Date-Intervals with missing data")
 date_NA <- unique(NA_vals$date)
 int_NA <- unique(NA_vals$interval)
 ```
-There is definitely a pattern here. All of the missing values occurred over `r length(date_NA)` days and `r length(int_NA)` intervals. It looks like the data is missing for all or close to all intervals on each of the 8 days. Let's confirm this by comparing the min and max intervals for the missing data to the min and max for the intervals from the original data.
+There is not an observable pattern in which days have missing values but there is definitely a pattern in which intervals have missing values. It looks like the values are missing for almost all of the intervals on each of the days except for those intervals represented by the blank spots in the graph. Let's first confirm that the missing values span the entire day by comparing the min and max intervals for the missing data to the min and max intervals from the original data.
 
 ``` {r missing_interval}
 range_int <- c(min(activity$interval), max(activity$interval))
 range_NA <- c(min(NA_vals$interval), max(NA_vals$interval))
 identical(range_int, range_NA)
 ```
-We've confirmed that the data is missing for the whole day on each of the days. Let's also check out those blank spaces in the missing value plot and determine if they represent actual measurements that were somehow taken or if they are due to gaps in the original data set. We'll compare the unique intervals in NA_vals to the unique intervals in the original data set.
+We've confirmed that the missing values span the whole day. Now what about those strange intervals where there appear to be measurements (those blank spaces in the plot). Are they actual measurements that were somehow taken or do they represent gaps in the original data set we were not made aware of? We'll compare the unique intervals in NA_vals to the unique intervals in the original data set.
 
 ``` {r missing_gaps}
 identical(unique(NA_vals$interval), unique(activity$interval))
 gap_length <- max(int_NA[2:length(int_NA)] - int_NA[1:(length(int_NA) - 1)] - 5)
 ```
 
-Interesting. I guess the original data is _NOT exactly_ recorded in 5-min intervals. There are `r gap_length` minute gaps in the original data. So, there does not appear to be a regular pattern in which days have missing data but the entire day's worth of data is missing. Because people are 'creatures of habit' I will fill in the missing values for each day using the median of each interval over the same week day.
+Interesting. I guess the original data is _NOT exactly_ recorded in 5-min intervals. There are a number of `r gap_length` minute gaps in the original data set and no extra gaps in the missing data set. So we can conclude that for the complete set of values is missing for each of the days, including all intervals.
+
+Given the assumption that people are 'creatures of habit' I have decided to fill in the missing values based on weekday. Specifically, I will impute the median of each interval over each weekday to the days in question according to which day of the week it is.
 
 ``` {r impute_values}
-activity <- mutate(activity, weekday = wday(date, label = TRUE), impute = is.na(steps))
-med_steps <- filter(activity, impute == FALSE) %>%
-                    group_by(weekday, interval) %>%
-                    summarize(median = median(steps))
-impute <- filter(activity, impute == TRUE)
-test <- inner_join(impute, med_steps, by = c("weekday", "interval"))
+activity <- mutate(activity, weekday = wday(date, label = TRUE),
+                             impute = is.na(steps))
+measured <- filter(activity, impute == FALSE)
+med_steps <- group_by(measured, weekday, interval) %>%
+                summarize(median = median(steps))
+
+# ensure no missing values for calculated medians
+all(complete.cases(med_steps)) 
+
+# impute median values into 'steps'
+imputed <- filter(activity, impute == TRUE) %>%
+            inner_join(med_steps, by = c("weekday", "interval")) %>%
+            mutate(steps = median, median = NULL) # removes extra column
+
+# recombine measured and imputed
+activity_adj <- rbind(measured, imputed)
 ```
+With the new imputed data set let's revisit the histogram of the total number of steps taken each day, calculate the mean and median total number of steps taken per day, and then compare these values with the originals from the first part of the project.
 
-2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+``` {r imputed_total_steps, fig.width = 6, fig.height = 4}
+by_date_adj <- group_by(activity_adj, date)
+daily_steps_adj <- summarize(by_date_adj, total = sum(steps))
+daily_hist_adj <- qplot(total, data = daily_steps_adj, bins = 20,
+      xlab = "total steps per day",
+      main = "Histogram (imputed values)")
+avg_day_adj <- mean(daily_steps_adj$total)
+med_day_adj <- median(daily_steps_adj$total)
 
-3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+grid.arrange(daily_hist, daily_hist_adj, ncol = 2)
+```
+It's difficult to get much from the histogram with such a small data set but the net effect of imputing values by interval and weekday was to shift the number of days with zero total steps per day to higher values with most still falling below 5,000 steps per day.
 
-4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+**Looking at the changes in mean and median:**
+
+Data set | Mean | Median
+---------|------|-------
+Original | `r avg_day` | `r med_day`
+Imputed | `r avg_day_adj` | `r med_day_adj`
+
+Imputing values increased the mean somewhat, as would be expected with less zero values, but it had no effect on the median.
+
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
