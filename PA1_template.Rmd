@@ -4,7 +4,9 @@ author: "Allen Baron"
 date: "3/30/2017"
 output: 
   html_document:
-    keep_md: true
+    fig_height: 3
+    fig_width: 4
+    keep_md: yes
 ---
 
 ``` {r global_opts, include = FALSE}
@@ -149,6 +151,18 @@ Imputing values increased the mean somewhat, as would be expected with less zero
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+``` {r weekday_end}
+activity_adj <- mutate(activity_adj, 
+                       week_part = if_else(weekday == "Sun" | weekday == "Sat",
+                                           "weekend", "weekday"))
+
+avg_int_week <- group_by(activity_adj, week_part, interval) %>%
+                summarize(avg_steps = mean(steps))
+qplot(interval, avg_steps, data = avg_int_week, geom = "line",
+      facets = week_part ~ .,
+      main = "Avg steps for each interval, averaged over weekday/end")
+```
 
 For this part the 𝚠𝚎𝚎𝚔𝚍𝚊𝚢𝚜() function may be of some help here. Use the dataset with the filled-in missing values for this part.
 
