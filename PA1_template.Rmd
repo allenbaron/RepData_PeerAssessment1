@@ -16,17 +16,17 @@ knitr::opts_chunk$set(fig.width = 4, fig.height = 3)
 _Note:_ `read_csv()` from the `readr` package "flexibly parse many types of data found in the wild, while still cleanly failing when data unexpectedly changes"
 ([readr README](https://cran.r-project.org/web/packages/readr/README.html), so little preprocessing is needed at this stage.
 
-```{r load_data, eval = -2}
+``` {r preload, eval = -3, results = "hide"}
 library(tidyverse)
+library(lubridate)
 unzip("activity.zip")
-activity <- read_csv("activity.csv")
-problems(activity) # check for errors in loading/parsing
 ```
 
-``` {r initial_look}
+```{r load_data}
+activity <- read_csv("activity.csv")
+problems(activity) # check for errors in loading/parsing
 str(activity)
 summary(activity)
-summarize_each(activity, funs(sum(is.na(.))))
 ```
 1. Load the data (i.e. 𝚛𝚎𝚊𝚍.𝚌𝚜𝚟())
 2. Process/transform the data (if necessary) into a format suitable for your analysis
@@ -52,30 +52,67 @@ med_day <- median(daily_steps$total)
 - Median number of steps taken each day = `r med_steps`.
 
 ## What is the average daily activity pattern?
-
+Time series plot of the 5-minute interval and the average number of steps taken, averaged across all days:
 ``` {r interval_steps}
-avg_interval <- group_by(activity, interval) %>%
-                summarize(average_steps = mean(steps, na.rm = TRUE))
-qplot(interval, average_steps, data = avg_interval, geom = "line")
-max_steps <- max(avg_interval$average_steps)
-max_interval <- avg_interval[avg_interval$average_steps %in% max_steps, "interval"]
+avg_int <- group_by(activity, interval) %>%
+                summarize(avg_steps = mean(steps, na.rm = TRUE))
+qplot(interval, avg_steps, data = avg_int, geom = "line",
+      main = "Avg steps for each interval, averaged over all days")
 ```
 
-The 5-minute interval, on average across all the days in the dataset, that contains the maximum number of steps is `r max_interval`.
+``` {r max_avg_interval}
+max_steps <- max(avg_int$avg_steps)
+max_int <- avg_int[avg_int$avg_steps %in% max_steps, "interval"]
+```
 
-1. Make a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
-2. ?
+The 5-minute interval, on average across all the days in the dataset, that contains the maximum number of steps is `r max_int`.
 
 
 ## Imputing missing values
+The following table shows the total number of NA values for each column of the data set.
 
-Note that there are a number of days/intervals where there are missing values (coded as 𝙽𝙰). The presence of missing days may introduce bias into some calculations or summaries of the data.
+``` {r total_missing}
+total_NA <- summarize_each(activity, funs(sum(is.na(.))))
+total_NA
+```
+Total rows with NA values = `r total_NA$steps`
 
-1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with 𝙽𝙰s)
+Before deciding how to impute NA values it's probably best to see if there is any pattern.
+``` {r missing_info}
+NA_vals <- filter(activity, is.na(activity$steps))
+qplot(interval, date, data = NA_vals)
+date_NA <- unique(NA_vals$date)
+int_NA <- unique(NA_vals$interval)
+```
+There is definitely a pattern here. All of the missing values occurred over `r length(date_NA)` days and `r length(int_NA)` intervals. It looks like the data is missing for all or close to all intervals on each of the 8 days. Let's confirm this by comparing the min and max intervals for the missing data to the min and max for the intervals from the original data.
 
+``` {r missing_interval}
+range_int <- c(min(activity$interval), max(activity$interval))
+range_NA <- c(min(NA_vals$interval), max(NA_vals$interval))
+identical(range_int, range_NA)
+```
+We've confirmed that the data is missing for the whole day on each of the days. Let's also check out those blank spaces in the missing value plot and determine if they represent actual measurements that were somehow taken or if they are due to gaps in the original data set. We'll compare the unique intervals in NA_vals to the unique intervals in the original data set.
+
+``` {r missing_gaps}
+identical(unique(NA_vals$interval), unique(activity$interval))
+gap_length <- max(int_NA[2:length(int_NA)] - int_NA[1:(length(int_NA) - 1)] - 5)
+```
+
+Interesting. I guess the original data is _NOT exactly_ recorded in 5-min intervals. There are `r gap_length` minute gaps in the original data. So, there does not appear to be a regular pattern in which days have missing data but the entire day's worth of data is missing. Because people are 'creatures of habit' I will fill in the missing values for each day using the median of each interval over the same week day.
+
+``` {r impute_values}
+activity <- mutate(activity, weekday = wday(date, label = TRUE), impute = is.na(steps))
+med_steps <- filter(activity, impute == FALSE) %>%
+                    group_by(weekday, interval) %>%
+                    summarize(median = median(steps))
+impute <- filter(activity, impute == TRUE)
+test <- inner_join(impute, med_steps, by = c("weekday", "interval"))
+```
 
 2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
 3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
 4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
 
 ## Are there differences in activity patterns between weekdays and weekends?
